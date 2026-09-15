@@ -152,11 +152,25 @@ per-frame image warping/morphing (explicitly out of scope, §9).
 Rather than rendering a forward pass and then a separate identical backward
 pass, `buildPingPongOpacitySequence(halfFrameCount)` generates one ascending
 ramp `[0, ..., 1]` and appends its reverse with the shared endpoints removed.
-Since gif.js loops infinitely (`repeat: 0`), the wrap-around from the last
-frame back to the first is itself a seamless step, so this produces a
-continuous forward/backward ping-pong with roughly half the frame data of
-the naive approach. `pickHalfFrameCount` targets the "20-30 frames for 10s"
-guidance from §7.
+When the loop is set to repeat, the wrap-around from the last frame back to
+the first is itself a seamless step, so this produces a continuous
+forward/backward ping-pong with roughly half the frame data of the naive
+approach. `pickHalfFrameCount` targets the "20-30 frames for 10s" guidance
+from §7, independent of the chosen duration (frame *count* stays fixed for
+predictable file size; shorter durations just play those frames faster).
+
+Three GIF export options are user-configurable (§5 UI, "Generate GIF" step):
+
+- **Duration** (5s/8s/10s) is the total cross-fade time excluding any hold.
+- **Hold at peak** adds a pause at 100% opacity. Since a GIF frame's delay is
+  just a number, `computeFrameDelays` implements this by adding the hold
+  directly onto the single peak-opacity frame's delay — no extra frame data,
+  and the full loop takes `duration + hold` to play.
+- **Loop count** (play once / twice / infinitely) maps to gif.js's `repeat`
+  option via `loopCountToGifRepeat`: gif.js's own convention is `0` = forever,
+  `-1` = no repeat (play once), and `N` = `N` *additional* repeats after the
+  first play — so "loop count" (a total play count) of 1 maps to `-1`, and 2
+  maps to `1`.
 
 ## 5. Notable design decisions / spec clarifications
 

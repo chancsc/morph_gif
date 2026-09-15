@@ -3,7 +3,7 @@
  * a Web Worker; nothing leaves the browser.
  */
 import GIF from 'gif.js/dist/gif.js';
-import { buildPingPongOpacitySequence, computeFrameDelayMs } from '../core/gifSequence.ts';
+import { buildPingPongOpacitySequence, computeFrameDelays } from '../core/gifSequence.ts';
 
 export interface GifRenderInputs {
   /** Photo A, pre-drawn at the target output size. */
@@ -14,7 +14,12 @@ export interface GifRenderInputs {
   height: number;
   /** Frames in the ascending 0->1 half of the ping-pong loop; total frames = 2*halfFrameCount-2. */
   halfFrameCount: number;
+  /** Time spent cross-fading (0->1->0), not counting any hold at the peak. */
   durationMs: number;
+  /** Extra pause at 100% opacity before fading back out. Default 0 (no hold). */
+  holdAtPeakMs?: number;
+  /** gif.js `repeat` option: 0 = forever, -1 = play once, N = N additional repeats. Default 0. */
+  repeat?: number;
   quality?: number;
   workerScript?: string;
   onProgress?: (fraction: number) => void;
@@ -29,13 +34,15 @@ export function renderPingPongGif(inputs: GifRenderInputs): Promise<Blob> {
     height,
     halfFrameCount,
     durationMs,
+    holdAtPeakMs = 0,
+    repeat = 0,
     quality = 10,
     workerScript = 'gif.worker.js',
     onProgress,
   } = inputs;
 
   const sequence = buildPingPongOpacitySequence(halfFrameCount);
-  const delay = Math.max(20, Math.round(computeFrameDelayMs(durationMs, sequence.length)));
+  const delays = computeFrameDelays(sequence, durationMs, holdAtPeakMs).map((d) => Math.max(20, Math.round(d)));
 
   const frameCanvas = document.createElement('canvas');
   frameCanvas.width = width;
@@ -43,17 +50,17 @@ export function renderPingPongGif(inputs: GifRenderInputs): Promise<Blob> {
   const ctx = frameCanvas.getContext('2d');
   if (!ctx) throw new Error('renderPingPongGif: could not get 2D context');
 
-  const gif = new GIF({ workers: 2, quality, workerScript, width, height, repeat: 0 });
+  const gif = new GIF({ workers: 2, quality, workerScript, width, height, repeat });
 
-  for (const opacity of sequence) {
+  sequence.forEach((opacity, i) => {
     ctx.clearRect(0, 0, width, height);
     ctx.globalAlpha = 1;
     ctx.drawImage(baseCanvas, 0, 0, width, height);
     ctx.globalAlpha = opacity;
     ctx.drawImage(topCanvas, 0, 0, width, height);
     ctx.globalAlpha = 1;
-    gif.addFrame(ctx, { copy: true, delay });
-  }
+    gif.addFrame(ctx, { copy: true, delay: delays[i] });
+  });
 
   return new Promise((resolve, reject) => {
     gif.on('progress', (fraction) => onProgress?.(fraction));

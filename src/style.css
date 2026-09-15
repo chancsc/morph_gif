@@ -212,6 +212,30 @@ button.primary {
   font-size: 0.9em;
 }
 
+.gif-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+
+.gif-options label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+
+.gif-options select {
+  background: var(--border);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 0.95em;
+}
+
 .error {
   color: var(--danger);
   font-weight: 600;

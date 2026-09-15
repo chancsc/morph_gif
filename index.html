@@ -129,9 +129,36 @@
       <section id="step-gif" class="step" hidden>
         <h2>5. Generate GIF</h2>
         <p class="hint">
-          10-second ping-pong cross-fade loop (0% &rarr; 100% &rarr; 0% opacity), capped to 800px
-          on the longest side to keep the file size manageable.
+          Ping-pong cross-fade loop (0% &rarr; 100% &rarr; 0% opacity), capped to 800px on the
+          longest side to keep the file size manageable.
         </p>
+        <div class="gif-options">
+          <label>
+            Duration
+            <select id="gifDuration" data-testid="gif-duration">
+              <option value="5000">5s</option>
+              <option value="8000">8s</option>
+              <option value="10000" selected>10s</option>
+            </select>
+          </label>
+          <label>
+            Hold at peak
+            <select id="gifHoldDuration" data-testid="gif-hold-duration">
+              <option value="0" selected>None</option>
+              <option value="500">0.5s</option>
+              <option value="1000">1s</option>
+              <option value="2000">2s</option>
+            </select>
+          </label>
+          <label>
+            Loop
+            <select id="gifLoopCount" data-testid="gif-loop-count">
+              <option value="1">Play once</option>
+              <option value="2">Loop 2 times</option>
+              <option value="infinite" selected>Infinite</option>
+            </select>
+          </label>
+        </div>
         <button id="generateGifBtn" data-testid="generate-gif-btn" class="primary">Generate GIF</button>
         <div class="gif-progress" id="gifProgressWrap" data-testid="gif-progress-wrap" hidden>
           <progress id="gifProgress" data-testid="gif-progress" max="100" value="0"></progress>

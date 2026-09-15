@@ -39,3 +39,29 @@ export function computeFrameDelayMs(durationMs: number, frameCount: number): num
   if (frameCount <= 0) throw new Error('computeFrameDelayMs: frameCount must be > 0');
   return durationMs / frameCount;
 }
+
+/**
+ * Per-frame delays (ms) for a ping-pong `sequence` (as from
+ * `buildPingPongOpacitySequence`): `motionDurationMs` is spread evenly across
+ * every frame, then `holdAtPeakMs` is added on top of the single frame at
+ * peak opacity (1) - so one full loop takes `motionDurationMs + holdAtPeakMs`
+ * to play. A GIF frame's delay is just a number, so "holding" at the peak
+ * costs nothing extra in frame data, only a longer delay on that one frame.
+ */
+export function computeFrameDelays(sequence: number[], motionDurationMs: number, holdAtPeakMs = 0): number[] {
+  const base = computeFrameDelayMs(motionDurationMs, sequence.length);
+  const peakIndex = sequence.indexOf(1);
+  return sequence.map((_, i) => (i === peakIndex ? base + holdAtPeakMs : base));
+}
+
+/**
+ * Maps a user-facing "how many times should it play" choice to gif.js's
+ * `repeat` option (0 = forever, -1 = no repeat/play once, N = N additional
+ * repeats after the first play). `loopCount` is the TOTAL number of times
+ * the loop plays, e.g. 1 = play once, 2 = play twice.
+ */
+export function loopCountToGifRepeat(loopCount: 'infinite' | number): number {
+  if (loopCount === 'infinite') return 0;
+  if (loopCount <= 1) return -1;
+  return Math.round(loopCount) - 1;
+}
