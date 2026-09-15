@@ -245,6 +245,26 @@ of their `hidden` attribute. The fix is a single `[hidden] { display: none
 why the e2e suite (which asserts on real visibility/layout) caught something
 a unit test or a manual click-through easily could have missed.
 
+### 6.4 Fitting the perspective editor to small screens
+
+The marking canvases (`MarkingCanvasView`) shrink to fit a phone screen for
+free, via plain CSS (`canvas { max-width: 100% }`): a `<canvas>` is a
+*replaced element*, so browsers exempt it from the usual flex/grid rule that
+a fixed-size child forces its container to grow ("automatic minimum size").
+The perspective editor's container is a plain `<div>`, which gets no such
+exemption — with a large uploaded photo, its fixed-pixel-size content forced
+`.perspective-slot`'s CSS Grid track wider than the viewport, overflowing a
+phone screen even though the canvas itself had `max-width: 100%`. Fixed with
+`min-width: 0` on the grid items (`.perspective-slot` et al.) so the track
+can actually shrink to the available space, plus a uniform CSS
+`transform: scale()` on a `.perspective-editor-inner` wrapper (containing
+the canvas and its absolutely-positioned drag handles together) so
+everything — including handle positions and the live homography preview —
+shrinks as one unit; only the pointer-drag math needs to divide by that
+scale factor to convert screen coordinates back into the editor's native,
+unscaled coordinate space. Covered by an e2e test using a 1600x1200 synthetic
+photo on a 390px-wide viewport.
+
 ## 7. Known limitations (mirrors spec §9)
 
 - No pixel-level image morphing/warping mid-transition — only opacity

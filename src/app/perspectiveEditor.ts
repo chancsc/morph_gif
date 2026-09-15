@@ -13,6 +13,8 @@ import { workingImageFromCanvas, type WorkingImage } from './workingImage.ts';
 
 export class PerspectiveEditor {
   private readonly container: HTMLElement;
+  /** Wraps the canvas + handles at their full, unscaled pixel size; gets CSS-scaled as a unit to fit small screens. */
+  private readonly innerEl: HTMLElement;
   private readonly previewCanvas: HTMLCanvasElement;
   private readonly handleEls: readonly HTMLElement[];
   private readonly maxDisplayDim: number;
@@ -21,6 +23,8 @@ export class PerspectiveEditor {
   private displayScale = 1;
   private dispW = 0;
   private dispH = 0;
+  /** Uniform CSS scale applied to innerEl to fit the available width (<=1; 1 on wide-enough screens). */
+  private fitScale = 1;
 
   constructor(
     container: HTMLElement,
@@ -31,11 +35,17 @@ export class PerspectiveEditor {
     if (handleEls.length !== 4) {
       throw new Error('PerspectiveEditor: needs exactly 4 handle elements');
     }
+    const innerEl = previewCanvas.parentElement;
+    if (!innerEl) {
+      throw new Error('PerspectiveEditor: previewCanvas must have a wrapping parent element');
+    }
     this.container = container;
+    this.innerEl = innerEl;
     this.previewCanvas = previewCanvas;
     this.handleEls = handleEls;
     this.maxDisplayDim = maxDisplayDim;
     this.previewCanvas.style.transformOrigin = '0 0';
+    this.innerEl.style.transformOrigin = '0 0';
     this.handleEls.forEach((el, id) => this.makeDraggable(el, id));
   }
 
@@ -53,8 +63,18 @@ export class PerspectiveEditor {
     this.previewCanvas.height = this.dispH;
     this.previewCanvas.style.width = `${this.dispW}px`;
     this.previewCanvas.style.height = `${this.dispH}px`;
-    this.container.style.width = `${this.dispW}px`;
-    this.container.style.height = `${this.dispH}px`;
+    this.innerEl.style.width = `${this.dispW}px`;
+    this.innerEl.style.height = `${this.dispH}px`;
+
+    // Shrink the whole editor (canvas + handles, as one unit) to fit the available width, the
+    // same way the marking canvases shrink via plain `canvas { max-width: 100% }` on narrow
+    // screens - but here handle positions are real DOM elements, not canvas pixels, so a uniform
+    // CSS transform (rather than resizing the canvas itself) is what keeps them in sync.
+    const availableWidth = this.container.parentElement?.getBoundingClientRect().width || this.dispW;
+    this.fitScale = Math.min(1, availableWidth / this.dispW);
+    this.innerEl.style.transform = `scale(${this.fitScale})`;
+    this.container.style.width = `${this.dispW * this.fitScale}px`;
+    this.container.style.height = `${this.dispH * this.fitScale}px`;
 
     const ctx = this.previewCanvas.getContext('2d');
     if (!ctx) throw new Error('PerspectiveEditor: could not get 2D context');
@@ -124,8 +144,13 @@ export class PerspectiveEditor {
         if (!this.handleSet) return;
         const rect = this.container.getBoundingClientRect();
         const margin = 60;
-        const x = Math.min(Math.max(moveEvent.clientX - rect.left, -margin), this.dispW + margin);
-        const y = Math.min(Math.max(moveEvent.clientY - rect.top, -margin), this.dispH + margin);
+        // Pointer coordinates are in real screen pixels; convert back into the editor's
+        // unscaled dispW x dispH coordinate space (the same space handle positions, the
+        // homography, and the matrix3d preview all use) by undoing the CSS fit-scale.
+        const rawX = (moveEvent.clientX - rect.left) / this.fitScale;
+        const rawY = (moveEvent.clientY - rect.top) / this.fitScale;
+        const x = Math.min(Math.max(rawX, -margin), this.dispW + margin);
+        const y = Math.min(Math.max(rawY, -margin), this.dispH + margin);
         this.handleSet.moveHandle(id, { x, y });
         this.syncHandleElements();
         this.updatePreviewTransform();

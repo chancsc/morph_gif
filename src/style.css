@@ -73,6 +73,15 @@ header h1 {
   gap: 16px;
 }
 
+/* Grid items default to min-width: auto, which lets a fixed-width, non-replaced-element child
+   (e.g. .perspective-editor, a plain div) force its track wider than the viewport. Without this,
+   a large uploaded photo can overflow the page horizontally on a narrow screen. */
+.upload-slot,
+.perspective-slot,
+.marking-slot {
+  min-width: 0;
+}
+
 @media (max-width: 640px) {
   .upload-grid,
   .perspective-grid,
@@ -106,6 +115,10 @@ canvas {
   position: relative;
   touch-action: none;
   max-width: 100%;
+}
+
+.perspective-editor-inner {
+  position: relative;
 }
 
 .perspective-editor canvas {
