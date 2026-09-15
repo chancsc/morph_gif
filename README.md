@@ -43,3 +43,18 @@ npm run dev       # http://localhost:5173
    Preview it, then download.
 
 No photo, point, or pixel ever leaves the browser tab.
+
+## Deploying to GitHub Pages
+
+`.github/workflows/deploy.yml` builds and deploys `dist/` on every push to
+`main`. To turn it on:
+
+1. Merge this branch into `main` (Pages builds from `main`; the workflow
+   won't run on other branches).
+2. In the repo, go to **Settings → Pages → Build and deployment → Source**
+   and select **"GitHub Actions"**.
+3. Push to `main` (or re-run the workflow manually from the Actions tab) —
+   the site will publish to `https://<owner>.github.io/morph_gif/`.
+
+`vite.config.ts` sets `base: '/morph_gif/'` for production builds so assets
+resolve correctly at that subpath; local dev (`npm run dev`) is unaffected.
