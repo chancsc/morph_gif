@@ -123,19 +123,48 @@ canvas {
 
 .perspective-editor canvas {
   cursor: default;
+  /* The canvas is purely visual - users interact only via .handle - and a large keystone
+     correction can visually overflow its own box (CSS transforms don't affect layout), which
+     would otherwise let it intercept clicks meant for the Confirm/Reset buttons below it. */
+  pointer-events: none;
 }
 
 .handle {
   position: absolute;
-  width: 18px;
-  height: 18px;
-  margin-left: -9px;
-  margin-top: -9px;
-  border-radius: 50%;
+  width: 16px;
+  height: 52px;
+  margin-left: -8px;
+  margin-top: -26px;
+  border-radius: 8px;
   background: var(--accent);
   border: 2px solid white;
-  cursor: grab;
+  cursor: ns-resize;
   touch-action: none;
+  box-shadow: 0 0 0 4px rgb(79 140 255 / 25%);
+}
+
+.handle::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  border-top: 2px solid white;
+  border-right: 2px solid white;
+  transform: translate(-50%, -75%) rotate(-45deg);
+}
+
+.handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  border-bottom: 2px solid white;
+  border-left: 2px solid white;
+  transform: translate(-50%, -25%) rotate(-45deg);
 }
 
 .handle:active {
@@ -174,6 +203,26 @@ button.primary {
   border-color: var(--accent);
   font-weight: 600;
   margin-top: 14px;
+}
+
+button.danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.restart-bar {
+  margin-top: 8px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.restart-bar .hint {
+  margin: 0;
 }
 
 .pair-panel {

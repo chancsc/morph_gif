@@ -31,8 +31,9 @@ npm run dev       # http://localhost:5173
 1. **Upload** Photo A (the reference) and Photo B (the one that gets aligned
    onto A).
 2. **(Optional) Perspective correction** — if either photo was shot at a
-   tilt, drag its 4 corner handles to where they should sit if the subject
-   were parallel to the camera, then confirm.
+   slight left-right tilt, touch and pull the handle on the left or right
+   edge up or down to straighten it (works best when the subject is upright
+   and centered), then confirm.
 3. **Mark points** — click a point on Photo A, then the matching point on
    Photo B. Repeat at least 4 times. Delete or undo mis-clicks as needed.
 4. **Align** — pick Similarity (rotation + uniform scale) or Affine
@@ -43,6 +44,9 @@ npm run dev       # http://localhost:5173
    (once, twice, or infinitely), then generate a ping-pong cross-fade
    (0% → 100% → 0% opacity), capped at 800px on the longest side. Preview it,
    then download.
+
+**Restart** at the bottom of the page clears both photos, all points, and
+any generated GIF, and starts over.
 
 No photo, point, or pixel ever leaves the browser tab.
 
