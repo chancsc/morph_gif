@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { PHOTO_A_MARKERS, PHOTO_B_MARKERS, writeTestImages } from '../fixtures/testImages.ts';
+import { PHOTO_A_MARKERS, PHOTO_B_MARKERS, writeLargeTestImage, writeTestImages } from '../fixtures/testImages.ts';
 
 test.describe('Photo Align & Morph GIF - full user flow', () => {
   test('upload -> mark 4 point pairs -> align -> export a ping-pong GIF', async ({ page }) => {
@@ -142,5 +142,51 @@ test.describe('Photo Align & Morph GIF - full user flow', () => {
     await expect(page.getByTestId('marking-hint')).toContainText('Photo B');
 
     expect(consoleErrors, `unexpected page errors: ${consoleErrors.join('\n')}`).toHaveLength(0);
+  });
+
+  test('perspective correction fits a large photo to a mobile viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 }); // iPhone-ish width
+
+    const largePhoto = writeLargeTestImage();
+    await page.goto('/');
+    await page.getByTestId('file-a').setInputFiles(largePhoto);
+    await page.getByTestId('file-b').setInputFiles(largePhoto);
+    await expect(page.locator('#step-perspective')).toBeVisible();
+
+    const editor = page.getByTestId('perspective-container-a');
+    const editorBox = await editor.boundingBox();
+    if (!editorBox) throw new Error('perspective editor not found');
+
+    // The editor (and everything in it) must fit within the viewport width - no horizontal
+    // overflow - the same way the marking canvases already fit narrow screens.
+    expect(editorBox.width).toBeLessThanOrEqual(390);
+
+    // All 4 handles should also land within the visible viewport, not off past the edge.
+    for (let i = 0; i < 4; i++) {
+      const handleBox = await editor.locator(`.handle[data-handle="${i}"]`).boundingBox();
+      if (!handleBox) throw new Error(`handle ${i} not found`);
+      expect(handleBox.x).toBeGreaterThanOrEqual(-20);
+      expect(handleBox.x).toBeLessThanOrEqual(390);
+    }
+
+    // Dragging a handle on the shrunk editor should still move it to (roughly) where the
+    // pointer went, proving the screen-to-editor-space coordinate conversion is correct.
+    // Scroll the handle itself into view first: page.mouse uses viewport-relative coordinates,
+    // and the editor is taller than the remaining viewport, so scrolling the container alone
+    // can still leave this specific (bottom-right) handle below the fold.
+    const handle = editor.locator('.handle[data-handle="2"]'); // bottom-right corner
+    await handle.scrollIntoViewIfNeeded();
+    const before = await handle.boundingBox();
+    if (!before) throw new Error('handle not found');
+    const targetX = before.x - 60;
+    const targetY = before.y - 40;
+    await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(targetX, targetY, { steps: 5 });
+    await page.mouse.up();
+    const after = await handle.boundingBox();
+    if (!after) throw new Error('handle not found after drag');
+    expect(Math.abs(after.x - targetX)).toBeLessThan(15);
+    expect(Math.abs(after.y - targetY)).toBeLessThan(15);
   });
 });

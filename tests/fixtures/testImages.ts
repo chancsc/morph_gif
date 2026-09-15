@@ -57,3 +57,21 @@ export function writeTestImages(): TestImagePaths {
   writeFileSync(photoB, renderPhoto(PHOTO_B_MARKERS));
   return { photoA, photoB };
 }
+
+// A large photo (bigger than the 800px marking/perspective display cap) - big enough on its own
+// to overflow a phone-width viewport unless the editor's "fit to screen" scaling actually works.
+export const LARGE_IMAGE_WIDTH = 1600;
+export const LARGE_IMAGE_HEIGHT = 1200;
+
+export function writeLargeTestImage(): string {
+  const dir = join(tmpdir(), 'morph-gif-e2e-fixtures');
+  mkdirSync(dir, { recursive: true });
+  const path = join(dir, 'photo-large.png');
+  const canvas = new RgbaCanvas(LARGE_IMAGE_WIDTH, LARGE_IMAGE_HEIGHT, [245, 245, 245]);
+  canvas.fillSquare(200, 200, 60, [220, 40, 40]);
+  canvas.fillSquare(1400, 200, 60, [40, 180, 60]);
+  canvas.fillSquare(1400, 1000, 60, [40, 90, 220]);
+  canvas.fillSquare(200, 1000, 60, [230, 200, 30]);
+  writeFileSync(path, canvas.toPng());
+  return path;
+}
