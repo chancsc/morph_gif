@@ -25,7 +25,7 @@ src/core/            pure functions & classes — no DOM, no canvas, no fetch
   linalg.ts            Gaussian elimination, least squares, 3x3 inverse
   geometry.ts           similarity / affine / homography solve + apply
   pairs.ts              PairManager: click state machine (A/B alternation, undo)
-  perspectiveHandles.ts PerspectiveHandleSet: 4-handle drag state -> homography
+  keystone.ts            KeystoneState: left/right edge-stretch drag state -> homography
   imageUtils.ts          computeDisplayScale (pure) + File/Image I/O (browser)
   bilinear.ts            bilinear pixel sampling over a raw RGBA buffer
   gifSequence.ts          ping-pong opacity sequence / frame timing math
@@ -33,7 +33,7 @@ src/core/            pure functions & classes — no DOM, no canvas, no fetch
 src/app/              DOM-touching glue — exercised via Playwright, not Vitest
   workingImage.ts        unifies HTMLImageElement / HTMLCanvasElement sources
   markingCanvas.ts        renders a photo + markers, converts clicks -> full-res coords
-  perspectiveEditor.ts    4 draggable handles, CSS matrix3d live preview, bake-on-confirm
+  perspectiveEditor.ts    2 edge-pull handles, CSS matrix3d live preview, bake-on-confirm
   perspectiveWarp.ts      per-pixel inverse-mapped canvas warp (the "bake" step)
   renderOverlay.ts        draws base + transformed layer at any scale/opacity
   gifExport.ts            drives gif.js to encode the ping-pong sequence
@@ -42,7 +42,7 @@ src/main.ts            wires index.html to the above; all mutable UI state lives
 src/types/gif.d.ts      ambient types for gif.js (ships with none)
 ```
 
-`src/core/*` has 61 Vitest unit tests and zero DOM dependency. `src/app/*`
+`src/core/*` has 73 Vitest unit tests and zero DOM dependency. `src/app/*`
 and `src/main.ts` are covered by the Playwright e2e suite instead, since
 their job is fundamentally "wire up real canvases and real clicks."
 
@@ -54,8 +54,9 @@ File upload
   -> workingImageFromElement()      WorkingImage { source, width, height }
 
 (optional) Perspective correction
-  -> PerspectiveEditor, in DISPLAY-scaled coordinates
-  -> on confirm: coordinates scaled back to full-res, solveHomography4()
+  -> PerspectiveEditor drags update a KeystoneState { leftStretch, rightStretch }
+     (dimensionless fractions, not pixels - resolution-independent)
+  -> on confirm: KeystoneState.computeHomography(fullResWidth, fullResHeight)
   -> warpImageToCanvas()             bakes a new full-res WorkingImage
 
 Point marking
@@ -110,15 +111,34 @@ two output equations don't share unknowns, they decouple into two
 independent 3-unknown least-squares problems (`solveAffine`) — cheaper and
 simpler than a single 6x6 normal-equations solve, with an identical result.
 
-### 4.3 Homography (perspective correction, §8)
+### 4.3 Homography, simplified to a 2-parameter keystone control (§8)
 
-The optional perspective-correction step needs a full 8-DOF projective
-transform. Because the UI always presents exactly 4 draggable handles (§8.2),
-the system is **exactly determined** (8 equations, 8 unknowns) rather than
-over-determined, so `solveHomography4` does a direct linear solve (DLT) via
-Gaussian elimination — no least squares or SVD needed. `invertHomography`
-(via a general 3x3 matrix inverse) gives the inverse map used to bake the
-warp (§4.5).
+A full perspective correction is an 8-DOF projective transform (`solveHomography4`
+in `geometry.ts`, still used internally, and still solvable as an exactly-determined
+8-equation linear system via Gaussian elimination/DLT — no least squares or SVD
+needed). But 4 independently-draggable 2D corner handles are fiddly on a touch
+screen and overkill for the common case this app targets: an upright, roughly
+centered subject shot with a slight left-right tilt (the classic "keystone"
+effect, where one edge of the subject reads taller than the other).
+
+So the UI exposes only 2 numbers — `leftStretch` and `rightStretch`
+(`KeystoneState` in `keystone.ts`) — each describing how far that edge's two
+corners spread apart (positive) or pull together (negative), **symmetrically
+about the vertical center**. `keystoneCorners(width, height, leftStretch,
+rightStretch)` turns those two numbers into the 4 origin -> corrected corner
+correspondences (left corners always stay at `x=0`, right corners at
+`x=width` — only y-positions move), which are then handed to the same
+`solveHomography4` as before. This is a strict *subset* of what a full
+4-handle system could express — no horizontal shear, no independent corner
+movement — traded deliberately for a control that's a single vertical drag
+per side. `invertHomography` (via a general 3x3 matrix inverse) gives the
+inverse map used to bake the warp (§4.5).
+
+Because `leftStretch`/`rightStretch` are dimensionless fractions of
+half-height (not pixel offsets), `computeHomography` needs no display-scale
+conversion — it's called directly with the image's real width/height,
+whether that's the ~800px display size (for the live CSS preview) or the
+full source resolution (for the "Confirm" bake).
 
 ### 4.4 Composing a transform with a display/export scale
 
@@ -193,13 +213,25 @@ Three GIF export options are user-configurable (§5 UI, "Generate GIF" step):
   bundlable module, so it lives in `public/` and is kept in sync with the
   installed `gif.js` version by a `postinstall` script
   (`scripts/sync-gif-worker.js`) rather than hand-copied and left to drift.
+- **Simplified perspective control**: §8.2 originally specced 4 independent
+  draggable corner handles. That's fiddly on a touch screen and more power
+  than the common case needs, so it was replaced with 2 edge handles
+  (vertical-drag-only) assuming an upright, centered subject (§4.3) — a
+  deliberate reduction in expressiveness for a much simpler interaction.
+- **Restart**: a single button at the bottom of the page
+  (`restartBtn` in `main.ts`) clears every piece of app state by just calling
+  `location.reload()` after a confirmation dialog. A hand-written reset
+  function would need to correctly clear every field of `AppState`, both
+  perspective editors, both marking canvases, the file inputs, and revoke
+  the GIF's object URL — a full reload gets all of that for free with no
+  risk of missing one, at the cost of a page flash.
 
 ## 6. Testing strategy
 
 Tests were designed around the pure/DOM split, so this section is really the
 justification for that split.
 
-### 6.1 Unit tests (Vitest) — `npm test`, 61 tests, `src/core/**/*.test.ts`
+### 6.1 Unit tests (Vitest) — `npm test`, 73 tests, `src/core/**/*.test.ts`
 
 Every `src/core/*` module is pure (no DOM), so tests run in Node with no
 mocking:
@@ -213,13 +245,16 @@ mocking:
   `toCanvasSetTransformArgs` / `homographyToCssMatrix3d` conversions.
 - **`pairs.test.ts`**: the full click state machine — alternation
   enforcement, the 4-pair minimum, undo, delete-by-index, clear.
-- **`perspectiveHandles.test.ts`**: identity homography before any drag,
-  correct homography after dragging, reset.
+- **`keystone.test.ts`**: corner correspondences for zero/positive/negative
+  edge stretch (including that stretch stays symmetric about the vertical
+  center and clamps at the extremes), `KeystoneState`'s identity homography
+  before any adjustment, exact corner mapping after one, and reset.
 - **`bilinear.test.ts`**: exact-pixel sampling, center-of-4-pixels averaging,
   linear interpolation, out-of-bounds transparency, edge clamping.
 - **`gifSequence.test.ts`**: ping-pong sequence shape (starts at 0, peaks at
   1 exactly once, symmetric, correct length), frame-count targeting, delay
-  math.
+  math, per-frame delays with a peak hold, and the loop-count -> gif.js
+  `repeat` mapping.
 - **`imageUtils.test.ts`**: `computeDisplayScale` (aspect-ratio-preserving
   downscale, no-op when already small enough).
 
@@ -227,16 +262,29 @@ mocking:
 
 Playwright drives the real app in the pre-installed Chromium against a real
 Vite dev server (`playwright.config.ts` starts one on port 4319
-automatically). Three tests:
+automatically). Eight tests:
 
 1. **Full flow**: upload → mark 4 point pairs → align → preview → generate
    and download a GIF, asserting no console/page errors anywhere in the run.
-2. **Point pair management**: an out-of-order click (B before A) is rejected
+2. **GIF options**: a non-default duration, peak hold, and loop count all
+   still produce a valid GIF.
+3. **Point pair management**: an out-of-order click (B before A) is rejected
    with a hint rather than corrupting state; undo removes a pending click;
    delete removes a specific pair; Align stays disabled below 4 pairs.
-3. **Perspective correction**: dragging a corner handle updates the live
-   CSS `matrix3d()` preview; confirming bakes the warp and the marking step
+4. **Perspective correction**: pulling an edge handle vertically updates the
+   live CSS `matrix3d()` preview and moves only that handle's y-position (x
+   stays pinned to the edge); confirming bakes the warp and the marking step
    keeps working afterward.
+5. **Perspective correction reset**: dragging a handle away from center and
+   clicking Reset snaps it back exactly, verified via the handle's own
+   `style.top` (not its viewport bounding box, which is scroll-dependent).
+6. **Perspective editor on mobile**: a 1600x1200 photo on a 390px-wide
+   viewport doesn't overflow, both handles stay within the viewport, and
+   dragging still lands where the pointer went.
+7. **Restart**: marks a point pair, clicks Restart, accepts the confirmation
+   dialog, and verifies the page is back to a fresh upload-only state.
+8. **Restart cancel**: declining the confirmation dialog leaves all state
+   untouched.
 
 **Test fixtures** (`tests/fixtures/`): two 400x300 synthetic PNGs, each with
 4 distinctly colored square markers at known pixel coordinates. These are
@@ -258,6 +306,17 @@ of their `hidden` attribute. The fix is a single `[hidden] { display: none
 !important; }` rule in `style.css`. Left here because it's a good example of
 why the e2e suite (which asserts on real visibility/layout) caught something
 a unit test or a manual click-through easily could have missed.
+
+A second one, from building the 2-handle keystone editor: after a large edge
+stretch, clicking "Confirm correction" started timing out in Playwright with
+"`<canvas>` ... subtree intercepts pointer events". CSS `transform` doesn't
+affect layout, only paint, so the warped preview canvas could visually (and
+therefore for hit-testing purposes) extend past its own box into the
+Confirm/Reset buttons below it — a large enough correction made the canvas
+cover those buttons. Since the canvas is purely decorative (all interaction
+goes through the separate `.handle` elements), the fix is
+`pointer-events: none` on it in `style.css`, letting clicks pass through to
+whatever's actually there.
 
 ### 6.4 Fitting the perspective editor to small screens
 

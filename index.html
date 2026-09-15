@@ -37,8 +37,9 @@
       <section id="step-perspective" class="step" hidden>
         <h2>2. Perspective correction <span class="optional">(optional)</span></h2>
         <p class="hint">
-          If a photo was taken at a tilt, drag the corner handles to where they should sit if the
-          subject were parallel to the camera, then confirm to bake the correction in.
+          If a photo was taken at a slight left-right tilt, touch and pull the handle on the left
+          or right edge up or down to straighten it &mdash; works best when the subject is upright
+          and centered. Confirm to bake the correction in.
         </p>
         <div class="perspective-grid">
           <div class="perspective-slot">
@@ -46,10 +47,8 @@
             <div class="perspective-editor" id="perspectiveContainerA" data-testid="perspective-container-a">
               <div class="perspective-editor-inner">
                 <canvas id="perspectiveCanvasA"></canvas>
-                <div class="handle" data-handle="0"></div>
-                <div class="handle" data-handle="1"></div>
-                <div class="handle" data-handle="2"></div>
-                <div class="handle" data-handle="3"></div>
+                <div class="handle" data-handle="left"></div>
+                <div class="handle" data-handle="right"></div>
               </div>
             </div>
             <div class="perspective-controls">
@@ -62,10 +61,8 @@
             <div class="perspective-editor" id="perspectiveContainerB" data-testid="perspective-container-b">
               <div class="perspective-editor-inner">
                 <canvas id="perspectiveCanvasB"></canvas>
-                <div class="handle" data-handle="0"></div>
-                <div class="handle" data-handle="1"></div>
-                <div class="handle" data-handle="2"></div>
-                <div class="handle" data-handle="3"></div>
+                <div class="handle" data-handle="left"></div>
+                <div class="handle" data-handle="right"></div>
               </div>
             </div>
             <div class="perspective-controls">
@@ -170,6 +167,11 @@
         </div>
         <p class="error" id="gifError" data-testid="gif-error" hidden></p>
       </section>
+
+      <div class="restart-bar">
+        <button id="restartBtn" data-testid="restart-btn" class="danger">Restart</button>
+        <p class="hint">Clears both photos, all points, and any generated GIF.</p>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

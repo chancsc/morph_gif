@@ -69,6 +69,8 @@ const gifPreview = el<HTMLImageElement>('gifPreview');
 const downloadGifLink = el<HTMLAnchorElement>('downloadGifLink');
 const gifError = el<HTMLElement>('gifError');
 
+const restartBtn = el<HTMLButtonElement>('restartBtn');
+
 // ---- App state ---------------------------------------------------------
 
 interface AppState {
@@ -365,3 +367,15 @@ async function generateGif(): Promise<void> {
     generateGifBtn.disabled = false;
   }
 }
+
+// ---- Restart -------------------------------------------------------------
+
+// A full reload is the simplest way to guarantee every piece of state (both
+// working images, all points, the alignment, any generated GIF blob URL,
+// the file inputs themselves) goes back to exactly the same state as a
+// fresh page load, with no risk of missing something in a hand-written reset.
+restartBtn.addEventListener('click', () => {
+  if (confirm('Restart and clear everything? This removes both photos, all marked points, and any generated GIF.')) {
+    location.reload();
+  }
+});

@@ -1,13 +1,16 @@
 /**
- * Optional perspective (tilt) correction editor (spec §8). Shows 4 draggable
- * handles starting at the image corners; dragging them gives a cheap live
- * preview via CSS `matrix3d()` on the preview canvas (§8.3), and "Confirm"
- * bakes a true per-pixel warp into a new full-resolution image via
+ * Simplified perspective (keystone) correction editor (spec §8, revised for
+ * a simpler touch control). Two edge handles sit at the vertical middle of
+ * the left and right image edges; dragging one up or down stretches or
+ * pinches that edge symmetrically about the vertical center, correcting the
+ * common case of an upright, centered subject shot with a slight left-right
+ * tilt. The live preview uses CSS `matrix3d()` (§8.3), and "Confirm" bakes a
+ * true per-pixel warp into a new full-resolution image via
  * `warpImageToCanvas` before the point-pair alignment step runs.
  */
-import { homographyToCssMatrix3d, solveHomography4, type Point } from '../core/geometry.ts';
+import { homographyToCssMatrix3d } from '../core/geometry.ts';
 import { computeDisplayScale } from '../core/imageUtils.ts';
-import { PerspectiveHandleSet } from '../core/perspectiveHandles.ts';
+import { KeystoneState, MAX_EDGE_STRETCH } from '../core/keystone.ts';
 import { warpImageToCanvas } from './perspectiveWarp.ts';
 import { workingImageFromCanvas, type WorkingImage } from './workingImage.ts';
 
@@ -16,9 +19,10 @@ export class PerspectiveEditor {
   /** Wraps the canvas + handles at their full, unscaled pixel size; gets CSS-scaled as a unit to fit small screens. */
   private readonly innerEl: HTMLElement;
   private readonly previewCanvas: HTMLCanvasElement;
-  private readonly handleEls: readonly HTMLElement[];
+  private readonly leftHandleEl: HTMLElement;
+  private readonly rightHandleEl: HTMLElement;
   private readonly maxDisplayDim: number;
-  private handleSet: PerspectiveHandleSet | null = null;
+  private readonly state = new KeystoneState();
   private sourceImage: WorkingImage | null = null;
   private displayScale = 1;
   private dispW = 0;
@@ -32,8 +36,13 @@ export class PerspectiveEditor {
     handleEls: readonly HTMLElement[],
     maxDisplayDim: number,
   ) {
-    if (handleEls.length !== 4) {
-      throw new Error('PerspectiveEditor: needs exactly 4 handle elements');
+    if (handleEls.length !== 2) {
+      throw new Error('PerspectiveEditor: needs exactly 2 handle elements (left edge, right edge)');
+    }
+    const leftHandleEl = handleEls.find((el) => el.dataset.handle === 'left');
+    const rightHandleEl = handleEls.find((el) => el.dataset.handle === 'right');
+    if (!leftHandleEl || !rightHandleEl) {
+      throw new Error('PerspectiveEditor: handle elements must have data-handle="left" and "right"');
     }
     const innerEl = previewCanvas.parentElement;
     if (!innerEl) {
@@ -42,19 +51,22 @@ export class PerspectiveEditor {
     this.container = container;
     this.innerEl = innerEl;
     this.previewCanvas = previewCanvas;
-    this.handleEls = handleEls;
+    this.leftHandleEl = leftHandleEl;
+    this.rightHandleEl = rightHandleEl;
     this.maxDisplayDim = maxDisplayDim;
     this.previewCanvas.style.transformOrigin = '0 0';
     this.innerEl.style.transformOrigin = '0 0';
-    this.handleEls.forEach((el, id) => this.makeDraggable(el, id));
+    this.makeDraggable(this.leftHandleEl, 'left');
+    this.makeDraggable(this.rightHandleEl, 'right');
   }
 
   get isActive(): boolean {
-    return this.handleSet !== null;
+    return this.sourceImage !== null;
   }
 
   load(image: WorkingImage): void {
     this.sourceImage = image;
+    this.state.reset();
     this.displayScale = computeDisplayScale(image.width, image.height, this.maxDisplayDim);
     this.dispW = Math.max(1, Math.round(image.width * this.displayScale));
     this.dispH = Math.max(1, Math.round(image.height * this.displayScale));
@@ -81,34 +93,24 @@ export class PerspectiveEditor {
     ctx.clearRect(0, 0, this.dispW, this.dispH);
     ctx.drawImage(image.source, 0, 0, this.dispW, this.dispH);
 
-    this.handleSet = new PerspectiveHandleSet([
-      { x: 0, y: 0 },
-      { x: this.dispW, y: 0 },
-      { x: this.dispW, y: this.dispH },
-      { x: 0, y: this.dispH },
-    ]);
     this.syncHandleElements();
     this.updatePreviewTransform();
   }
 
   reset(): void {
-    this.handleSet?.reset();
+    this.state.reset();
     this.syncHandleElements();
     this.updatePreviewTransform();
   }
 
   /** Bakes the current warp into a new full-resolution WorkingImage. */
   confirm(): WorkingImage {
-    if (!this.handleSet || !this.sourceImage) {
+    if (!this.sourceImage) {
       throw new Error('PerspectiveEditor: no image loaded');
     }
-    // Scale handle positions from display space back to full-resolution source space.
-    const toFullRes = (p: Point): Point => ({ x: p.x / this.displayScale, y: p.y / this.displayScale });
-    const fullResPairs = this.handleSet.handles.map((h) => ({
-      a: toFullRes(h.current),
-      b: toFullRes(h.origin),
-    }));
-    const homography = solveHomography4(fullResPairs);
+    // Stretch values are resolution-independent (fractions of half-height), so the homography can
+    // be computed directly from the full-resolution image dimensions - no display-scale conversion.
+    const homography = this.state.computeHomography(this.sourceImage.width, this.sourceImage.height);
     const warped = warpImageToCanvas(
       this.sourceImage.source,
       this.sourceImage.width,
@@ -120,38 +122,49 @@ export class PerspectiveEditor {
     return workingImageFromCanvas(warped);
   }
 
+  /**
+   * Handle vertical position encodes stretch directly: centered = no adjustment, dragged to the
+   * very top = max spread, dragged to the very bottom = max pinch. The full physical travel
+   * range (0..dispH) maps onto the full allowed stretch range (+/-MAX_EDGE_STRETCH) with no dead
+   * zone, so the handle tracks the pointer 1:1 across its entire draggable range.
+   */
+  private stretchToHandleY(stretch: number): number {
+    return this.dispH / 2 - (stretch / MAX_EDGE_STRETCH) * (this.dispH / 2);
+  }
+
+  private handleYToStretch(handleY: number): number {
+    return ((this.dispH / 2 - handleY) / (this.dispH / 2)) * MAX_EDGE_STRETCH;
+  }
+
   private syncHandleElements(): void {
-    if (!this.handleSet) return;
-    this.handleSet.handles.forEach((h, i) => {
-      const el = this.handleEls[i];
-      el.style.left = `${h.current.x}px`;
-      el.style.top = `${h.current.y}px`;
-    });
+    this.leftHandleEl.style.left = '0px';
+    this.leftHandleEl.style.top = `${this.stretchToHandleY(this.state.leftStretch)}px`;
+    this.rightHandleEl.style.left = `${this.dispW}px`;
+    this.rightHandleEl.style.top = `${this.stretchToHandleY(this.state.rightStretch)}px`;
   }
 
   private updatePreviewTransform(): void {
-    if (!this.handleSet) return;
-    this.previewCanvas.style.transform = homographyToCssMatrix3d(this.handleSet.computeHomography());
+    if (!this.sourceImage) return;
+    const homography = this.state.computeHomography(this.dispW, this.dispH);
+    this.previewCanvas.style.transform = homographyToCssMatrix3d(homography);
   }
 
-  private makeDraggable(el: HTMLElement, id: number): void {
+  private makeDraggable(el: HTMLElement, side: 'left' | 'right'): void {
     el.addEventListener('pointerdown', (downEvent) => {
-      if (!this.handleSet) return;
+      if (!this.sourceImage) return;
       downEvent.preventDefault();
       el.setPointerCapture(downEvent.pointerId);
 
       const onMove = (moveEvent: PointerEvent) => {
-        if (!this.handleSet) return;
         const rect = this.container.getBoundingClientRect();
-        const margin = 60;
-        // Pointer coordinates are in real screen pixels; convert back into the editor's
-        // unscaled dispW x dispH coordinate space (the same space handle positions, the
-        // homography, and the matrix3d preview all use) by undoing the CSS fit-scale.
-        const rawX = (moveEvent.clientX - rect.left) / this.fitScale;
+        // Pointer coordinates are in real screen pixels; convert back into the editor's unscaled
+        // dispH coordinate space (undoing the CSS fit-scale), then to a stretch value. Only the
+        // vertical position matters - horizontal drift is ignored, keeping this a 1D "pull" control.
         const rawY = (moveEvent.clientY - rect.top) / this.fitScale;
-        const x = Math.min(Math.max(rawX, -margin), this.dispW + margin);
-        const y = Math.min(Math.max(rawY, -margin), this.dispH + margin);
-        this.handleSet.moveHandle(id, { x, y });
+        const clampedY = Math.min(Math.max(rawY, 0), this.dispH);
+        const stretch = this.handleYToStretch(clampedY);
+        if (side === 'left') this.state.setLeftStretch(stretch);
+        else this.state.setRightStretch(stretch);
         this.syncHandleElements();
         this.updatePreviewTransform();
       };
