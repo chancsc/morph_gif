@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Photo Align &amp; Morph</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>Photo Align &amp; Morph GIF</h1>
+        <p class="subtitle">
+          Upload two photos, mark matching points, and generate a cross-fade GIF. Everything runs
+          in your browser &mdash; nothing is uploaded anywhere.
+        </p>
+      </header>
+
+      <section id="step-upload" class="step">
+        <h2>1. Upload photos</h2>
+        <div class="upload-grid">
+          <div class="upload-slot">
+            <label for="fileA">Photo A (reference)</label>
+            <input type="file" id="fileA" data-testid="file-a" accept="image/jpeg,image/png,image/webp" />
+            <p class="filename" id="filenameA" data-testid="filename-a"></p>
+          </div>
+          <div class="upload-slot">
+            <label for="fileB">Photo B (aligned onto A)</label>
+            <input type="file" id="fileB" data-testid="file-b" accept="image/jpeg,image/png,image/webp" />
+            <p class="filename" id="filenameB" data-testid="filename-b"></p>
+          </div>
+        </div>
+        <p class="error" id="uploadError" data-testid="upload-error" hidden></p>
+      </section>
+
+      <section id="step-perspective" class="step" hidden>
+        <h2>2. Perspective correction <span class="optional">(optional)</span></h2>
+        <p class="hint">
+          If a photo was taken at a tilt, drag the corner handles to where they should sit if the
+          subject were parallel to the camera, then confirm to bake the correction in.
+        </p>
+        <div class="perspective-grid">
+          <div class="perspective-slot">
+            <h3>Photo A</h3>
+            <div class="perspective-editor" id="perspectiveContainerA" data-testid="perspective-container-a">
+              <canvas id="perspectiveCanvasA"></canvas>
+              <div class="handle" data-handle="0"></div>
+              <div class="handle" data-handle="1"></div>
+              <div class="handle" data-handle="2"></div>
+              <div class="handle" data-handle="3"></div>
+            </div>
+            <div class="perspective-controls">
+              <button id="confirmPerspectiveA" data-testid="confirm-perspective-a">Confirm correction</button>
+              <button id="resetPerspectiveA" data-testid="reset-perspective-a">Reset</button>
+            </div>
+          </div>
+          <div class="perspective-slot">
+            <h3>Photo B</h3>
+            <div class="perspective-editor" id="perspectiveContainerB" data-testid="perspective-container-b">
+              <canvas id="perspectiveCanvasB"></canvas>
+              <div class="handle" data-handle="0"></div>
+              <div class="handle" data-handle="1"></div>
+              <div class="handle" data-handle="2"></div>
+              <div class="handle" data-handle="3"></div>
+            </div>
+            <div class="perspective-controls">
+              <button id="confirmPerspectiveB" data-testid="confirm-perspective-b">Confirm correction</button>
+              <button id="resetPerspectiveB" data-testid="reset-perspective-b">Reset</button>
+            </div>
+          </div>
+        </div>
+        <button id="continueToMarking" data-testid="continue-to-marking" class="primary">
+          Continue to point marking &rarr;
+        </button>
+      </section>
+
+      <section id="step-marking" class="step" hidden>
+        <h2>3. Mark matching points</h2>
+        <p class="hint" id="markingHint" data-testid="marking-hint">
+          Click a point on Photo A, then the matching point on Photo B. Repeat at least 4 times.
+        </p>
+        <div class="marking-grid">
+          <div class="marking-slot">
+            <h3>Photo A</h3>
+            <canvas id="canvasA" data-testid="canvas-a"></canvas>
+          </div>
+          <div class="marking-slot">
+            <h3>Photo B</h3>
+            <canvas id="canvasB" data-testid="canvas-b"></canvas>
+          </div>
+        </div>
+
+        <div class="pair-panel">
+          <h3>Point pairs (<span id="pairCount" data-testid="pair-count">0</span>)</h3>
+          <ul id="pairList" data-testid="pair-list"></ul>
+          <div class="pair-actions">
+            <button id="undoLastPoint" data-testid="undo-last-point">Undo last click</button>
+            <button id="clearAllPairs" data-testid="clear-all-pairs">Clear all</button>
+          </div>
+        </div>
+
+        <div class="transform-choice">
+          <span>Transform type:</span>
+          <label><input type="radio" name="transformType" value="similarity" checked /> Similarity (rotation + uniform scale)</label>
+          <label><input type="radio" name="transformType" value="affine" /> Affine (independent x/y scale + shear)</label>
+        </div>
+
+        <button id="alignBtn" data-testid="align-btn" class="primary" disabled>Align</button>
+        <p class="error" id="alignError" data-testid="align-error" hidden></p>
+      </section>
+
+      <section id="step-align" class="step" hidden>
+        <h2>4. Preview alignment</h2>
+        <canvas id="overlayCanvas" data-testid="overlay-canvas"></canvas>
+        <div class="opacity-control">
+          <label for="opacitySlider">Photo B opacity (quick cross-fade check)</label>
+          <input type="range" id="opacitySlider" data-testid="opacity-slider" min="0" max="100" value="50" />
+        </div>
+        <button id="continueToGif" data-testid="continue-to-gif" class="primary">
+          Continue to GIF export &rarr;
+        </button>
+      </section>
+
+      <section id="step-gif" class="step" hidden>
+        <h2>5. Generate GIF</h2>
+        <p class="hint">
+          10-second ping-pong cross-fade loop (0% &rarr; 100% &rarr; 0% opacity), capped to 800px
+          on the longest side to keep the file size manageable.
+        </p>
+        <button id="generateGifBtn" data-testid="generate-gif-btn" class="primary">Generate GIF</button>
+        <div class="gif-progress" id="gifProgressWrap" data-testid="gif-progress-wrap" hidden>
+          <progress id="gifProgress" data-testid="gif-progress" max="100" value="0"></progress>
+          <span id="gifProgressLabel" data-testid="gif-progress-label">0%</span>
+        </div>
+        <div class="gif-result" id="gifResultWrap" data-testid="gif-result-wrap" hidden>
+          <img id="gifPreview" data-testid="gif-preview" alt="Generated cross-fade GIF preview" />
+          <a id="downloadGifLink" data-testid="download-gif-link" download="photo-align-morph.gif">Download GIF</a>
+        </div>
+        <p class="error" id="gifError" data-testid="gif-error" hidden></p>
+      </section>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
