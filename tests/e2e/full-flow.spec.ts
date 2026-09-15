@@ -139,7 +139,7 @@ test.describe('Photo Align & Morph GIF - full user flow', () => {
     await expect(page.getByTestId('pair-count')).toHaveText('0');
   });
 
-  test('perspective correction: dragging a handle and confirming does not break the pipeline (§8)', async ({
+  test('perspective correction: touch-pulling an edge handle and confirming does not break the pipeline (§8)', async ({
     page,
   }) => {
     const consoleErrors: string[] = [];
@@ -152,14 +152,14 @@ test.describe('Photo Align & Morph GIF - full user flow', () => {
     await expect(page.locator('#step-perspective')).toBeVisible();
 
     const container = page.getByTestId('perspective-container-a');
-    const handle = container.locator('.handle[data-handle="1"]'); // top-right corner
+    const handle = container.locator('.handle[data-handle="left"]');
     const handleBox = await handle.boundingBox();
     if (!handleBox) throw new Error('handle not found');
 
-    // Drag the top-right handle inward/down to simulate correcting a foreshortened corner.
+    // Pull the left edge handle straight up to stretch that side (simulating a left-right tilt).
     await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
     await page.mouse.down();
-    await page.mouse.move(handleBox.x - 40, handleBox.y + 30, { steps: 5 });
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y - 60, { steps: 5 });
     await page.mouse.up();
 
     // The live CSS preview should reflect the drag (non-identity transform).
@@ -169,6 +169,12 @@ test.describe('Photo Align & Morph GIF - full user flow', () => {
     expect(transform).toMatch(/matrix3d/);
     expect(transform).not.toBe('matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)');
 
+    // The handle should have moved up (and only up - horizontal position is pinned to the edge).
+    const afterDragBox = await handle.boundingBox();
+    if (!afterDragBox) throw new Error('handle not found after drag');
+    expect(afterDragBox.y).toBeLessThan(handleBox.y);
+    expect(Math.abs(afterDragBox.x - handleBox.x)).toBeLessThan(2);
+
     // Confirming should bake the warp and let the marking step continue to work normally.
     await page.getByTestId('confirm-perspective-a').click();
     await expect(page.locator('#step-marking')).toBeVisible();
@@ -177,6 +183,36 @@ test.describe('Photo Align & Morph GIF - full user flow', () => {
     await expect(page.getByTestId('marking-hint')).toContainText('Photo B');
 
     expect(consoleErrors, `unexpected page errors: ${consoleErrors.join('\n')}`).toHaveLength(0);
+  });
+
+  test('perspective correction: reset snaps a dragged handle back to center', async ({ page }) => {
+    const { photoA, photoB } = writeTestImages();
+    await page.goto('/');
+    await page.getByTestId('file-a').setInputFiles(photoA);
+    await page.getByTestId('file-b').setInputFiles(photoB);
+    await expect(page.locator('#step-perspective')).toBeVisible();
+
+    const container = page.getByTestId('perspective-container-a');
+    const handle = container.locator('.handle[data-handle="right"]');
+    // Read the handle's own style.top (its position in the editor's internal, unscaled
+    // coordinate space) rather than its viewport-relative bounding box, so this assertion
+    // doesn't depend on where the page happens to be scrolled to.
+    const handleTop = () => handle.evaluate((el) => parseFloat((el as HTMLElement).style.top));
+
+    const centeredTop = await handleTop();
+    const handleBox = await handle.boundingBox();
+    if (!handleBox) throw new Error('handle not found');
+
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + 60, { steps: 5 });
+    await page.mouse.up();
+    const draggedTop = await handleTop();
+    expect(Math.abs(draggedTop - centeredTop)).toBeGreaterThan(10);
+
+    await page.getByTestId('reset-perspective-a').click();
+    const resetTop = await handleTop();
+    expect(Math.abs(resetTop - centeredTop)).toBeLessThan(1);
   });
 
   test('perspective correction fits a large photo to a mobile viewport', async ({ page }) => {
@@ -196,32 +232,75 @@ test.describe('Photo Align & Morph GIF - full user flow', () => {
     // overflow - the same way the marking canvases already fit narrow screens.
     expect(editorBox.width).toBeLessThanOrEqual(390);
 
-    // All 4 handles should also land within the visible viewport, not off past the edge.
-    for (let i = 0; i < 4; i++) {
-      const handleBox = await editor.locator(`.handle[data-handle="${i}"]`).boundingBox();
-      if (!handleBox) throw new Error(`handle ${i} not found`);
+    // Both edge handles should land within the visible viewport, not off past the edge.
+    for (const side of ['left', 'right']) {
+      const handleBox = await editor.locator(`.handle[data-handle="${side}"]`).boundingBox();
+      if (!handleBox) throw new Error(`${side} handle not found`);
       expect(handleBox.x).toBeGreaterThanOrEqual(-20);
       expect(handleBox.x).toBeLessThanOrEqual(390);
     }
 
-    // Dragging a handle on the shrunk editor should still move it to (roughly) where the
-    // pointer went, proving the screen-to-editor-space coordinate conversion is correct.
+    // Pulling the right edge handle on the shrunk editor should still move it vertically toward
+    // the pointer, proving the screen-to-editor-space coordinate conversion is correct.
     // Scroll the handle itself into view first: page.mouse uses viewport-relative coordinates,
     // and the editor is taller than the remaining viewport, so scrolling the container alone
-    // can still leave this specific (bottom-right) handle below the fold.
-    const handle = editor.locator('.handle[data-handle="2"]'); // bottom-right corner
+    // can still leave this handle below the fold.
+    const handle = editor.locator('.handle[data-handle="right"]');
     await handle.scrollIntoViewIfNeeded();
     const before = await handle.boundingBox();
     if (!before) throw new Error('handle not found');
-    const targetX = before.x - 60;
     const targetY = before.y - 40;
     await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2);
     await page.mouse.down();
-    await page.mouse.move(targetX, targetY, { steps: 5 });
+    await page.mouse.move(before.x + before.width / 2, targetY, { steps: 5 });
     await page.mouse.up();
     const after = await handle.boundingBox();
     if (!after) throw new Error('handle not found after drag');
-    expect(Math.abs(after.x - targetX)).toBeLessThan(15);
     expect(Math.abs(after.y - targetY)).toBeLessThan(15);
+    expect(Math.abs(after.x - before.x)).toBeLessThan(2); // horizontal position stays pinned to the edge
+  });
+
+  test('restart clears everything back to the initial upload-only state', async ({ page }) => {
+    const { photoA, photoB } = writeTestImages();
+    await page.goto('/');
+    await page.getByTestId('file-a').setInputFiles(photoA);
+    await page.getByTestId('file-b').setInputFiles(photoB);
+    await expect(page.locator('#step-marking')).toBeVisible();
+
+    // Mark a couple of points, so there is real state to clear.
+    const a0 = PHOTO_A_MARKERS[0];
+    const b0 = PHOTO_B_MARKERS[0];
+    await page.getByTestId('canvas-a').click({ position: { x: a0.x, y: a0.y } });
+    await page.getByTestId('canvas-b').click({ position: { x: b0.x, y: b0.y } });
+    await expect(page.getByTestId('pair-count')).toHaveText('1');
+
+    page.on('dialog', (dialog) => dialog.accept());
+    await page.getByTestId('restart-btn').click();
+    await page.waitForLoadState('load');
+
+    // Back to a fresh load: only the upload step visible, no filenames, file inputs empty.
+    await expect(page.locator('#step-perspective')).toBeHidden();
+    await expect(page.locator('#step-marking')).toBeHidden();
+    await expect(page.locator('#step-align')).toBeHidden();
+    await expect(page.locator('#step-gif')).toBeHidden();
+    await expect(page.getByTestId('filename-a')).toHaveText('');
+    await expect(page.getByTestId('filename-b')).toHaveText('');
+    const fileACount = await page.getByTestId('file-a').evaluate((el) => (el as HTMLInputElement).files?.length ?? 0);
+    expect(fileACount).toBe(0);
+  });
+
+  test('restart is cancellable: declining the confirm dialog leaves everything as-is', async ({ page }) => {
+    const { photoA, photoB } = writeTestImages();
+    await page.goto('/');
+    await page.getByTestId('file-a').setInputFiles(photoA);
+    await page.getByTestId('file-b').setInputFiles(photoB);
+    await expect(page.locator('#step-marking')).toBeVisible();
+
+    page.on('dialog', (dialog) => dialog.dismiss());
+    await page.getByTestId('restart-btn').click();
+
+    // Nothing should have changed - no reload happened.
+    await expect(page.locator('#step-marking')).toBeVisible();
+    await expect(page.getByTestId('filename-a')).toContainText('400');
   });
 });
