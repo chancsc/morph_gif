@@ -10,7 +10,7 @@ import { solveAffine, solveSimilarity } from './core/geometry.ts';
 import { GIF_OUTPUT_MAX_DIM, MARKING_DISPLAY_MAX_DIM, loadImageFromFile } from './core/imageUtils.ts';
 import { computeDisplayScale } from './core/imageUtils.ts';
 import { type ImageSide, PairManager } from './core/pairs.ts';
-import { pickHalfFrameCount } from './core/gifSequence.ts';
+import { loopCountToGifRepeat, pickHalfFrameCount } from './core/gifSequence.ts';
 import { renderPingPongGif } from './app/gifExport.ts';
 import { MarkingCanvasView, type MarkerPoint } from './app/markingCanvas.ts';
 import { PerspectiveEditor } from './app/perspectiveEditor.ts';
@@ -18,7 +18,6 @@ import { drawAlignedFrame, drawTransformedOnly } from './app/renderOverlay.ts';
 import { workingImageFromElement, type WorkingImage } from './app/workingImage.ts';
 
 const PREVIEW_MAX_DIM = 800;
-const GIF_DURATION_MS = 10_000;
 const GIF_TARGET_TOTAL_FRAMES = 24;
 
 // ---- Element lookups -------------------------------------------------
@@ -58,6 +57,9 @@ const overlayCanvas = el<HTMLCanvasElement>('overlayCanvas');
 const opacitySlider = el<HTMLInputElement>('opacitySlider');
 const continueToGif = el<HTMLButtonElement>('continueToGif');
 
+const gifDurationSelect = el<HTMLSelectElement>('gifDuration');
+const gifHoldDurationSelect = el<HTMLSelectElement>('gifHoldDuration');
+const gifLoopCountSelect = el<HTMLSelectElement>('gifLoopCount');
 const generateGifBtn = el<HTMLButtonElement>('generateGifBtn');
 const gifProgressWrap = el<HTMLElement>('gifProgressWrap');
 const gifProgress = el<HTMLProgressElement>('gifProgress');
@@ -334,13 +336,16 @@ async function generateGif(): Promise<void> {
     if (!topCtx) throw new Error('Could not create top-layer canvas context');
     drawTransformedOnly(topCtx, state.workingImageB, state.alignedMatrix, outputScale);
 
+    const loopValue = gifLoopCountSelect.value;
     const blob = await renderPingPongGif({
       baseCanvas,
       topCanvas,
       width: outW,
       height: outH,
       halfFrameCount: pickHalfFrameCount(GIF_TARGET_TOTAL_FRAMES),
-      durationMs: GIF_DURATION_MS,
+      durationMs: Number(gifDurationSelect.value),
+      holdAtPeakMs: Number(gifHoldDurationSelect.value),
+      repeat: loopCountToGifRepeat(loopValue === 'infinite' ? 'infinite' : Number(loopValue)),
       workerScript: `${import.meta.env.BASE_URL}gif.worker.js`,
       onProgress: (fraction) => {
         const pct = Math.round(fraction * 100);

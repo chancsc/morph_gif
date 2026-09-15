@@ -61,6 +61,41 @@ test.describe('Photo Align & Morph GIF - full user flow', () => {
     expect(consoleErrors, `unexpected console/page errors: ${consoleErrors.join('\n')}`).toHaveLength(0);
   });
 
+  test('GIF options: a shorter duration, a peak hold, and a finite loop count all produce a valid GIF', async ({
+    page,
+  }) => {
+    const { photoA, photoB } = writeTestImages();
+    await page.goto('/');
+    await page.getByTestId('file-a').setInputFiles(photoA);
+    await page.getByTestId('file-b').setInputFiles(photoB);
+    await expect(page.locator('#step-marking')).toBeVisible();
+
+    const canvasA = page.getByTestId('canvas-a');
+    const canvasB = page.getByTestId('canvas-b');
+    for (let i = 0; i < 4; i++) {
+      const a = PHOTO_A_MARKERS[i];
+      const b = PHOTO_B_MARKERS[i];
+      await canvasA.click({ position: { x: a.x, y: a.y } });
+      await canvasB.click({ position: { x: b.x, y: b.y } });
+    }
+    await page.getByTestId('align-btn').click();
+    await expect(page.locator('#step-align')).toBeVisible();
+    await page.getByTestId('continue-to-gif').click();
+    await expect(page.locator('#step-gif')).toBeVisible();
+
+    // Away from the defaults: 5s duration, 1s hold at peak, loop twice (not infinite).
+    await page.getByTestId('gif-duration').selectOption('5000');
+    await page.getByTestId('gif-hold-duration').selectOption('1000');
+    await page.getByTestId('gif-loop-count').selectOption('2');
+
+    await page.getByTestId('generate-gif-btn').click();
+    await expect(page.getByTestId('gif-result-wrap')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('gif-error')).toBeHidden();
+
+    const previewSrc = await page.getByTestId('gif-preview').getAttribute('src');
+    expect(previewSrc).toMatch(/^blob:/);
+  });
+
   test('point pair management: out-of-order click hint, undo, and delete', async ({ page }) => {
     const { photoA, photoB } = writeTestImages();
     await page.goto('/');
