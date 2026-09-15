@@ -14,10 +14,10 @@ export interface GifRenderInputs {
   height: number;
   /** Frames in the ascending 0->1 half of the ping-pong loop; total frames = 2*halfFrameCount-2. */
   halfFrameCount: number;
-  /** Time spent cross-fading (0->1->0), not counting any hold at the peak. */
+  /** Time spent cross-fading (0->1->0), not counting any hold at either end. */
   durationMs: number;
-  /** Extra pause at 100% opacity before fading back out. Default 0 (no hold). */
-  holdAtPeakMs?: number;
+  /** Extra pause at each end (100% opacity, and 0% opacity when the loop wraps back). Default 0 (no hold). */
+  holdMs?: number;
   /** gif.js `repeat` option: 0 = forever, -1 = play once, N = N additional repeats. Default 0. */
   repeat?: number;
   quality?: number;
@@ -34,7 +34,7 @@ export function renderPingPongGif(inputs: GifRenderInputs): Promise<Blob> {
     height,
     halfFrameCount,
     durationMs,
-    holdAtPeakMs = 0,
+    holdMs = 0,
     repeat = 0,
     quality = 10,
     workerScript = 'gif.worker.js',
@@ -42,7 +42,7 @@ export function renderPingPongGif(inputs: GifRenderInputs): Promise<Blob> {
   } = inputs;
 
   const sequence = buildPingPongOpacitySequence(halfFrameCount);
-  const delays = computeFrameDelays(sequence, durationMs, holdAtPeakMs).map((d) => Math.max(20, Math.round(d)));
+  const delays = computeFrameDelays(sequence, durationMs, holdMs).map((d) => Math.max(20, Math.round(d)));
 
   const frameCanvas = document.createElement('canvas');
   frameCanvas.width = width;

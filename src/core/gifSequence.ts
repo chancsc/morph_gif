@@ -43,15 +43,18 @@ export function computeFrameDelayMs(durationMs: number, frameCount: number): num
 /**
  * Per-frame delays (ms) for a ping-pong `sequence` (as from
  * `buildPingPongOpacitySequence`): `motionDurationMs` is spread evenly across
- * every frame, then `holdAtPeakMs` is added on top of the single frame at
- * peak opacity (1) - so one full loop takes `motionDurationMs + holdAtPeakMs`
- * to play. A GIF frame's delay is just a number, so "holding" at the peak
+ * every frame, then `holdMs` is added on top of BOTH extremes - the single
+ * frame at peak opacity (1) and the single frame at the base (0) - so each
+ * end pauses for the same length of time, including the moment the loop
+ * wraps back to the start. One full loop takes `motionDurationMs + 2 * holdMs`
+ * to play. A GIF frame's delay is just a number, so holding at either end
  * costs nothing extra in frame data, only a longer delay on that one frame.
  */
-export function computeFrameDelays(sequence: number[], motionDurationMs: number, holdAtPeakMs = 0): number[] {
+export function computeFrameDelays(sequence: number[], motionDurationMs: number, holdMs = 0): number[] {
   const base = computeFrameDelayMs(motionDurationMs, sequence.length);
   const peakIndex = sequence.indexOf(1);
-  return sequence.map((_, i) => (i === peakIndex ? base + holdAtPeakMs : base));
+  const baseIndex = sequence.indexOf(0);
+  return sequence.map((_, i) => (i === peakIndex || i === baseIndex ? base + holdMs : base));
 }
 
 /**

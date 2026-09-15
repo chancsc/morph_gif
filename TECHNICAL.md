@@ -182,10 +182,13 @@ predictable file size; shorter durations just play those frames faster).
 Three GIF export options are user-configurable (§5 UI, "Generate GIF" step):
 
 - **Duration** (5s/8s/10s) is the total cross-fade time excluding any hold.
-- **Hold at peak** adds a pause at 100% opacity. Since a GIF frame's delay is
-  just a number, `computeFrameDelays` implements this by adding the hold
-  directly onto the single peak-opacity frame's delay — no extra frame data,
-  and the full loop takes `duration + hold` to play.
+- **Hold at each end** adds an equal pause at both 100% opacity and 0%
+  opacity, including the moment the loop wraps back to the start — so both
+  ends of the ping-pong stop for the same length of time, not just the top.
+  Since a GIF frame's delay is just a number, `computeFrameDelays` implements
+  this by adding the hold onto the single peak-opacity frame's delay *and*
+  the single base (0%) frame's delay — no extra frame data, and the full
+  loop takes `duration + 2 * hold` to play.
 - **Loop count** (play once / twice / infinitely) maps to gif.js's `repeat`
   option via `loopCountToGifRepeat`: gif.js's own convention is `0` = forever,
   `-1` = no repeat (play once), and `N` = `N` *additional* repeats after the
