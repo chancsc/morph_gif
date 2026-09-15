@@ -68,16 +68,21 @@ describe('computeFrameDelays', () => {
     expect(delays.every((d) => d === 1000)).toBe(true);
   });
 
-  it('adds the hold only to the single peak-opacity frame, leaving the total at motion + hold', () => {
-    const seq = buildPingPongOpacitySequence(5); // length 8, peak at index 4
+  it('adds the hold to both the peak-opacity frame and the base (0%) frame equally', () => {
+    const seq = buildPingPongOpacitySequence(5); // length 8, base at index 0, peak at index 4
     const delays = computeFrameDelays(seq, 8000, 2000);
     const peakIndex = seq.indexOf(1);
+    const baseIndex = seq.indexOf(0);
     expect(delays[peakIndex]).toBe(1000 + 2000);
+    expect(delays[baseIndex]).toBe(1000 + 2000);
+    // Both ends pause for exactly the same length of time.
+    expect(delays[peakIndex]).toBe(delays[baseIndex]);
     delays.forEach((d, i) => {
-      if (i !== peakIndex) expect(d).toBe(1000);
+      if (i !== peakIndex && i !== baseIndex) expect(d).toBe(1000);
     });
-    // Total delay across one loop = motion duration + hold (the hold doesn't add frames).
-    expect(delays.reduce((a, b) => a + b, 0)).toBe(8000 + 2000);
+    // Total delay across one loop = motion duration + hold at EACH end (2x, not 1x) - the loop
+    // wrap-back to frame 0 is exactly where the base-frame hold is felt.
+    expect(delays.reduce((a, b) => a + b, 0)).toBe(8000 + 2000 * 2);
   });
 
   it('defaults to no hold when omitted', () => {

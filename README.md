@@ -40,9 +40,10 @@ npm run dev       # http://localhost:5173
    (independent x/y scale + shear), then click Align. Drag the opacity
    slider for a quick cross-fade sanity check.
 5. **Generate GIF** — choose a duration (5s/8s/10s), an optional hold at
-   100% opacity before it fades back out, and how many times it should loop
-   (once, twice, or infinitely), then generate a ping-pong cross-fade
-   (0% → 100% → 0% opacity), capped at 800px on the longest side. Preview it,
+   each end (100% opacity, and 0% opacity when it loops back) so both ends
+   pause evenly, and how many times it should loop (once, twice, or
+   infinitely), then generate a ping-pong cross-fade (0% → 100% → 0%
+   opacity), capped at 800px on the longest side. Preview it,
    then download.
 
 **Restart** at the bottom of the page clears both photos, all points, and

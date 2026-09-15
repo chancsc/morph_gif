@@ -346,7 +346,7 @@ async function generateGif(): Promise<void> {
       height: outH,
       halfFrameCount: pickHalfFrameCount(GIF_TARGET_TOTAL_FRAMES),
       durationMs: Number(gifDurationSelect.value),
-      holdAtPeakMs: Number(gifHoldDurationSelect.value),
+      holdMs: Number(gifHoldDurationSelect.value),
       repeat: loopCountToGifRepeat(loopValue === 'infinite' ? 'infinite' : Number(loopValue)),
       workerScript: `${import.meta.env.BASE_URL}gif.worker.js`,
       onProgress: (fraction) => {
