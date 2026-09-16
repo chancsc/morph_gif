@@ -276,13 +276,18 @@ button.danger {
   color: var(--muted);
 }
 
-.gif-options select {
+.gif-options select,
+.gif-options input[type='number'] {
   background: var(--border);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 8px;
   font-size: 0.95em;
+}
+
+.gif-options input[type='number'] {
+  width: 5em;
 }
 
 .error {

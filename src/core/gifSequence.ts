@@ -57,6 +57,21 @@ export function computeFrameDelays(sequence: number[], motionDurationMs: number,
   return sequence.map((_, i) => (i === peakIndex || i === baseIndex ? base + holdMs : base));
 }
 
+/** User-entered duration bounds (seconds): long enough to be useful, short enough to keep file size sane. */
+export const MIN_DURATION_SECONDS = 1;
+export const MAX_DURATION_SECONDS = 30;
+
+/**
+ * Clamps a free-entered duration (seconds) to a sane range and falls back to
+ * `fallbackSeconds` for non-finite input (e.g. an empty or invalid number
+ * field), so a malformed value can never turn into a zero/negative/NaN or
+ * absurdly long GIF.
+ */
+export function clampDurationSeconds(value: number, fallbackSeconds = 10): number {
+  const input = Number.isFinite(value) ? value : fallbackSeconds;
+  return Math.min(MAX_DURATION_SECONDS, Math.max(MIN_DURATION_SECONDS, Math.round(input)));
+}
+
 /**
  * Maps a user-facing "how many times should it play" choice to gif.js's
  * `repeat` option (0 = forever, -1 = no repeat/play once, N = N additional

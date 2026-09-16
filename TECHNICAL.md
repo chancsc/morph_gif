@@ -42,7 +42,7 @@ src/main.ts            wires index.html to the above; all mutable UI state lives
 src/types/gif.d.ts      ambient types for gif.js (ships with none)
 ```
 
-`src/core/*` has 73 Vitest unit tests and zero DOM dependency. `src/app/*`
+`src/core/*` has 77 Vitest unit tests and zero DOM dependency. `src/app/*`
 and `src/main.ts` are covered by the Playwright e2e suite instead, since
 their job is fundamentally "wire up real canvases and real clicks."
 
@@ -181,7 +181,14 @@ predictable file size; shorter durations just play those frames faster).
 
 Three GIF export options are user-configurable (§5 UI, "Generate GIF" step):
 
-- **Duration** (5s/8s/10s) is the total cross-fade time excluding any hold.
+- **Duration** is a free-entry number of seconds (a `<datalist>` offers
+  2/3/4/5/8/10s as quick presets, but any value can be typed) — the total
+  cross-fade time excluding any hold. `clampDurationSeconds` clamps it to
+  `[MIN_DURATION_SECONDS, MAX_DURATION_SECONDS]` (1-30s) and falls back to a
+  default for non-finite input (e.g. an emptied number field), so a stray
+  value can never produce a zero-length or absurdly long GIF; the clamped
+  value is written back into the field so the user sees what was actually
+  used.
 - **Hold at each end** adds an equal pause at both 100% opacity and 0%
   opacity, including the moment the loop wraps back to the start — so both
   ends of the ping-pong stop for the same length of time, not just the top.
@@ -234,7 +241,7 @@ Three GIF export options are user-configurable (§5 UI, "Generate GIF" step):
 Tests were designed around the pure/DOM split, so this section is really the
 justification for that split.
 
-### 6.1 Unit tests (Vitest) — `npm test`, 73 tests, `src/core/**/*.test.ts`
+### 6.1 Unit tests (Vitest) — `npm test`, 77 tests, `src/core/**/*.test.ts`
 
 Every `src/core/*` module is pure (no DOM), so tests run in Node with no
 mocking:
@@ -256,8 +263,9 @@ mocking:
   linear interpolation, out-of-bounds transparency, edge clamping.
 - **`gifSequence.test.ts`**: ping-pong sequence shape (starts at 0, peaks at
   1 exactly once, symmetric, correct length), frame-count targeting, delay
-  math, per-frame delays with a peak hold, and the loop-count -> gif.js
-  `repeat` mapping.
+  math, per-frame delays with a symmetric hold at both ends, the loop-count
+  -> gif.js `repeat` mapping, and `clampDurationSeconds` (in-range
+  passthrough, min/max clamping, rounding, NaN/Infinity fallback).
 - **`imageUtils.test.ts`**: `computeDisplayScale` (aspect-ratio-preserving
   downscale, no-op when already small enough).
 
@@ -265,28 +273,31 @@ mocking:
 
 Playwright drives the real app in the pre-installed Chromium against a real
 Vite dev server (`playwright.config.ts` starts one on port 4319
-automatically). Eight tests:
+automatically). Nine tests:
 
 1. **Full flow**: upload → mark 4 point pairs → align → preview → generate
    and download a GIF, asserting no console/page errors anywhere in the run.
-2. **GIF options**: a non-default duration, peak hold, and loop count all
-   still produce a valid GIF.
-3. **Point pair management**: an out-of-order click (B before A) is rejected
+2. **GIF options**: a custom (non-preset) duration, a hold at each end, and
+   a finite loop count all still produce a valid GIF.
+3. **GIF duration clamping**: entering an out-of-range value (999) still
+   produces a GIF, and the field is corrected back to the max (30) so the
+   user can see what was actually used.
+4. **Point pair management**: an out-of-order click (B before A) is rejected
    with a hint rather than corrupting state; undo removes a pending click;
    delete removes a specific pair; Align stays disabled below 4 pairs.
-4. **Perspective correction**: pulling an edge handle vertically updates the
+5. **Perspective correction**: pulling an edge handle vertically updates the
    live CSS `matrix3d()` preview and moves only that handle's y-position (x
    stays pinned to the edge); confirming bakes the warp and the marking step
    keeps working afterward.
-5. **Perspective correction reset**: dragging a handle away from center and
+6. **Perspective correction reset**: dragging a handle away from center and
    clicking Reset snaps it back exactly, verified via the handle's own
    `style.top` (not its viewport bounding box, which is scroll-dependent).
-6. **Perspective editor on mobile**: a 1600x1200 photo on a 390px-wide
+7. **Perspective editor on mobile**: a 1600x1200 photo on a 390px-wide
    viewport doesn't overflow, both handles stay within the viewport, and
    dragging still lands where the pointer went.
-7. **Restart**: marks a point pair, clicks Restart, accepts the confirmation
+8. **Restart**: marks a point pair, clicks Restart, accepts the confirmation
    dialog, and verifies the page is back to a fresh upload-only state.
-8. **Restart cancel**: declining the confirmation dialog leaves all state
+9. **Restart cancel**: declining the confirmation dialog leaves all state
    untouched.
 
 **Test fixtures** (`tests/fixtures/`): two 400x300 synthetic PNGs, each with

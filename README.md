@@ -39,10 +39,11 @@ npm run dev       # http://localhost:5173
 4. **Align** — pick Similarity (rotation + uniform scale) or Affine
    (independent x/y scale + shear), then click Align. Drag the opacity
    slider for a quick cross-fade sanity check.
-5. **Generate GIF** — choose a duration (5s/8s/10s), an optional hold at
-   each end (100% opacity, and 0% opacity when it loops back) so both ends
-   pause evenly, and how many times it should loop (once, twice, or
-   infinitely), then generate a ping-pong cross-fade (0% → 100% → 0%
+5. **Generate GIF** — enter any duration in seconds (1-30s; 2, 3, 4, 5, 8,
+   10 are offered as quick presets), an optional hold at each end (100%
+   opacity, and 0% opacity when it loops back) so both ends pause evenly,
+   and how many times it should loop (once, twice, or infinitely), then
+   generate a ping-pong cross-fade (0% → 100% → 0%
    opacity), capped at 800px on the longest side. Preview it,
    then download.
 
