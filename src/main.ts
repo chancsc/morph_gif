@@ -10,7 +10,7 @@ import { solveAffine, solveSimilarity } from './core/geometry.ts';
 import { GIF_OUTPUT_MAX_DIM, MARKING_DISPLAY_MAX_DIM, loadImageFromFile } from './core/imageUtils.ts';
 import { computeDisplayScale } from './core/imageUtils.ts';
 import { type ImageSide, PairManager } from './core/pairs.ts';
-import { loopCountToGifRepeat, pickHalfFrameCount } from './core/gifSequence.ts';
+import { clampDurationSeconds, loopCountToGifRepeat, pickHalfFrameCount } from './core/gifSequence.ts';
 import { renderPingPongGif } from './app/gifExport.ts';
 import { MarkingCanvasView, type MarkerPoint } from './app/markingCanvas.ts';
 import { PerspectiveEditor } from './app/perspectiveEditor.ts';
@@ -57,7 +57,7 @@ const overlayCanvas = el<HTMLCanvasElement>('overlayCanvas');
 const opacitySlider = el<HTMLInputElement>('opacitySlider');
 const continueToGif = el<HTMLButtonElement>('continueToGif');
 
-const gifDurationSelect = el<HTMLSelectElement>('gifDuration');
+const gifDurationInput = el<HTMLInputElement>('gifDuration');
 const gifHoldDurationSelect = el<HTMLSelectElement>('gifHoldDuration');
 const gifLoopCountSelect = el<HTMLSelectElement>('gifLoopCount');
 const generateGifBtn = el<HTMLButtonElement>('generateGifBtn');
@@ -338,6 +338,9 @@ async function generateGif(): Promise<void> {
     if (!topCtx) throw new Error('Could not create top-layer canvas context');
     drawTransformedOnly(topCtx, state.workingImageB, state.alignedMatrix, outputScale);
 
+    const durationSeconds = clampDurationSeconds(gifDurationInput.valueAsNumber);
+    gifDurationInput.value = String(durationSeconds); // reflect any clamping back to the user
+
     const loopValue = gifLoopCountSelect.value;
     const blob = await renderPingPongGif({
       baseCanvas,
@@ -345,7 +348,7 @@ async function generateGif(): Promise<void> {
       width: outW,
       height: outH,
       halfFrameCount: pickHalfFrameCount(GIF_TARGET_TOTAL_FRAMES),
-      durationMs: Number(gifDurationSelect.value),
+      durationMs: durationSeconds * 1000,
       holdMs: Number(gifHoldDurationSelect.value),
       repeat: loopCountToGifRepeat(loopValue === 'infinite' ? 'infinite' : Number(loopValue)),
       workerScript: `${import.meta.env.BASE_URL}gif.worker.js`,

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildPingPongOpacitySequence,
+  clampDurationSeconds,
   computeFrameDelayMs,
   computeFrameDelays,
   loopCountToGifRepeat,
+  MAX_DURATION_SECONDS,
+  MIN_DURATION_SECONDS,
   pickHalfFrameCount,
 } from './gifSequence.ts';
 
@@ -88,6 +91,32 @@ describe('computeFrameDelays', () => {
   it('defaults to no hold when omitted', () => {
     const seq = buildPingPongOpacitySequence(5);
     expect(computeFrameDelays(seq, 5000)).toEqual(computeFrameDelays(seq, 5000, 0));
+  });
+});
+
+describe('clampDurationSeconds', () => {
+  it('passes through values already within range', () => {
+    expect(clampDurationSeconds(2)).toBe(2);
+    expect(clampDurationSeconds(3)).toBe(3);
+    expect(clampDurationSeconds(4)).toBe(4);
+    expect(clampDurationSeconds(10)).toBe(10);
+  });
+
+  it('clamps to the min/max bounds', () => {
+    expect(clampDurationSeconds(0)).toBe(MIN_DURATION_SECONDS);
+    expect(clampDurationSeconds(-5)).toBe(MIN_DURATION_SECONDS);
+    expect(clampDurationSeconds(1000)).toBe(MAX_DURATION_SECONDS);
+  });
+
+  it('rounds fractional input to the nearest whole second', () => {
+    expect(clampDurationSeconds(3.4)).toBe(3);
+    expect(clampDurationSeconds(3.6)).toBe(4);
+  });
+
+  it('falls back for non-finite input (NaN, e.g. from an empty number field)', () => {
+    expect(clampDurationSeconds(NaN)).toBe(10);
+    expect(clampDurationSeconds(NaN, 5)).toBe(5);
+    expect(clampDurationSeconds(Infinity)).toBe(10);
   });
 });
 

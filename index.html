@@ -131,12 +131,25 @@
         </p>
         <div class="gif-options">
           <label>
-            Duration
-            <select id="gifDuration" data-testid="gif-duration">
-              <option value="5000">5s</option>
-              <option value="8000">8s</option>
-              <option value="10000" selected>10s</option>
-            </select>
+            Duration (seconds)
+            <input
+              type="number"
+              id="gifDuration"
+              data-testid="gif-duration"
+              min="1"
+              max="30"
+              step="1"
+              value="10"
+              list="gifDurationPresets"
+            />
+            <datalist id="gifDurationPresets">
+              <option value="2"></option>
+              <option value="3"></option>
+              <option value="4"></option>
+              <option value="5"></option>
+              <option value="8"></option>
+              <option value="10"></option>
+            </datalist>
           </label>
           <label>
             Hold at each end
